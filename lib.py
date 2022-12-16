@@ -6,6 +6,8 @@ import random
 import torch.random
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 from torch.autograd import Function
 import xml.etree.ElementTree as ET
 import torch.utils.data as data
