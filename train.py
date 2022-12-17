@@ -13,7 +13,7 @@ torch.backends.cudnn.benchmark = True
 torch.cuda.empty_cache()
 
 # create dataloader
-root_path = "./data"
+root_path = "./data/face_mask"
 imgs, anns = make_datapath_list(root_path)
 
 train_imgs, train_anns, val_imgs, val_anns = train_val_separate(imgs,anns,0.9)
@@ -24,7 +24,7 @@ input_size = 300
 
 transform = Transform(input_size, color_mean)
 anno_xml = Anno_xml(classes)
-train_dataset = MyDataset(train_imgs, train_anns, "train", transform, anno_xml)
+train_dataset = MyDataset(train_imgs, train_anns, phase="train", transform=transform, anno_xml= anno_xml)
 val_dataset = MyDataset(val_imgs, val_anns, phase="val", transform=transform, anno_xml=anno_xml)
 
 batch_size = 8
@@ -76,26 +76,28 @@ optimizer = optim.SGD(net.parameters(), lr=1e-3, momentum=0.9,weight_decay=5e-4)
 def train_model(net, dataloader_dict, criterion, optimizer, num_epochs):
     # move network to gpu
     net.to(device)
+
     iteration = 1
     epoch_train_loss = 0.0
     epoch_val_loss = 0.0
     logs  = []
 
-    for epoch in range(num_epochs + 1):
+    for epoch in range(num_epochs):
         t_epoch_start = time.time()
         t_iter_start = time.time()
 
-        print("----"*20)
+        print("----"*30)
         print("Epoch:{}/{}".format(epoch + 1, num_epochs))
-        print("----"*20)
+        print("----"*30)
 
         for phase in ["train", "val"]:
             if phase == "train":
                 net.train()
                 print("(Training)")
             else:
-                if epoch + 1 % 10 == 0:
+                if (epoch + 1) % 10 == 0:
                     net.eval()
+                    print("---"*10)
                     print("(Validating)")
                 else:
                     continue
@@ -115,26 +117,24 @@ def train_model(net, dataloader_dict, criterion, optimizer, num_epochs):
                     loss_l, loss_c = criterion(outputs, targets)
                     loss = loss_l + loss_c
 
-                    if phase == "train":
-                        loss.backward() #calcuate gradient
+                if phase == "train":
+                    loss.backward() #calcuate gradient
+                    nn.utils.clip_grad.clip_grad_value_(net.parameters(),clip_value=2.0)
+                    optimizer.step() #update parameter
 
-                        nn.utils.clip_grad.clip_grad_value_(net.parameters(),clip_value=2.0)
-
-                        optimizer.step() #update parameter
-
-                        if (iteration % 10) == 0:
-                            t_iter_end = time.time()
-                            duration = t_iter_end - t_iter_start
-                            print("Iteration {} || Loss: {:4f} || 10iter:{:4f} secs".format(iteration, loss.item(), duration))
-                            t_iter_start = time.time()
-                        epoch_train_loss += loss.item()
-                        iteration += 1
-                    else:
-                        epoch_val_loss += loss.item()
+                    if (iteration % 10) == 0:
+                        t_iter_end = time.time()
+                        duration = t_iter_end - t_iter_start
+                        print("Iteration {} || Loss: {:4f} || 10iter:{:4f} secs".format(iteration, loss.item(), duration))
+                        t_iter_start = time.time()
+                    epoch_train_loss += loss.item()
+                    iteration += 1
+                else:
+                    epoch_val_loss += loss.item()
         t_epoch_end = time.time()
         epoch_duration = t_epoch_end - t_epoch_start
-        print("----"*20)
-        print("Epoch {} || epoch_train_loss: {:4f} || epoch_val_loss: {:4f}".format(epoch+1,epoch_train_loss, epoch_val_loss))
+        print("----"*30)
+        print("Epoch {} || Epoch_train_loss: {:4f} || Epoch_val_loss: {:4f}".format(epoch+1,epoch_train_loss, epoch_val_loss))
         print("Duration: {:4f} secs".format(epoch_duration))
         t_epoch_start = time.time()
 
@@ -154,7 +154,7 @@ def train_model(net, dataloader_dict, criterion, optimizer, num_epochs):
         epoch_train_loss = 0.0
         epoch_val_loss = 0.0
 
-        if (epoch + 1) % 10 == 0:
+        if ((epoch + 1) % 10 == 0):
             torch.save(net.state_dict(), "./data/weights/ssd300_epoch{}.pth".format(epoch+1))
 
 num_epochs = 30

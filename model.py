@@ -16,9 +16,9 @@ def create_vgg():
         elif cfg == 'MC': #Ceiling
             layers += [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True)]
         else:
-            conv2d = nn.Conv2d(in_channels, cfg, kernel_size=3, stride=1, padding=1)
+            conv2d = nn.Conv2d(in_channels, cfg, kernel_size=3, padding=1)
 
-            relu =nn.ReLU(inplace=True)
+            relu = nn.ReLU(inplace=True)
 
             layers += [conv2d, relu]
             in_channels = cfg
@@ -60,21 +60,21 @@ def create_extras():
 
 def creat_loc_conf(num_classes=4, bbox_aspect_nums=[4,6,6,6,4,4]):
     loc_layers=[]
-    loc_layers += [nn.Conv2d(512, bbox_aspect_nums[0]*4, kernel_size=3, stride=1, padding=1)]
-    loc_layers += [nn.Conv2d(1024, bbox_aspect_nums[1]*4, kernel_size=3, stride=1, padding=1)]
-    loc_layers += [nn.Conv2d(512, bbox_aspect_nums[2]*4, kernel_size=3, stride=1, padding=1)]
-    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[3]*4, kernel_size=3, stride=1, padding=1)]
-    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[4]*4, kernel_size=3, stride=1, padding=1)]
-    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[5]*4, kernel_size=3, stride=1, padding=1)]
+    loc_layers += [nn.Conv2d(512, bbox_aspect_nums[0]*4, kernel_size=3, padding=1)]
+    loc_layers += [nn.Conv2d(1024, bbox_aspect_nums[1]*4, kernel_size=3, padding=1)]
+    loc_layers += [nn.Conv2d(512, bbox_aspect_nums[2]*4, kernel_size=3, padding=1)]
+    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[3]*4, kernel_size=3, padding=1)]
+    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[4]*4, kernel_size=3, padding=1)]
+    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[5]*4, kernel_size=3, padding=1)]
 
 
     conf_layers =[]
-    conf_layers += [nn.Conv2d(512, bbox_aspect_nums[0]*num_classes, kernel_size=3, stride=1, padding=1)]
-    conf_layers += [nn.Conv2d(1024, bbox_aspect_nums[1]*num_classes, kernel_size=3, stride=1, padding=1)]
-    conf_layers += [nn.Conv2d(512, bbox_aspect_nums[2]*num_classes, kernel_size=3, stride=1, padding=1)]
-    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[3]*num_classes, kernel_size=3, stride=1, padding=1)]
-    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[4]*num_classes, kernel_size=3, stride=1, padding=1)]
-    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[5]*num_classes, kernel_size=3, stride=1, padding=1)]
+    conf_layers += [nn.Conv2d(512, bbox_aspect_nums[0]*num_classes, kernel_size=3, padding=1)]
+    conf_layers += [nn.Conv2d(1024, bbox_aspect_nums[1]*num_classes, kernel_size=3, padding=1)]
+    conf_layers += [nn.Conv2d(512, bbox_aspect_nums[2]*num_classes, kernel_size=3, padding=1)]
+    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[3]*num_classes, kernel_size=3, padding=1)]
+    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[4]*num_classes, kernel_size=3, padding=1)]
+    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[5]*num_classes, kernel_size=3, padding=1)]
 
     # (512)
     return nn.ModuleList(loc_layers), nn.ModuleList(conf_layers)
@@ -85,8 +85,8 @@ cfg = {
     "bbox_aspect_num": [4,6,6,6,4,4], #So luong khung hinh cho cac source
     "feature_map": [38,19,10,5,3,1], #Size of feature of each source
     "steps": [8, 16, 32, 64, 100, 300],
-    "max_size" : [60, 111, 162, 213, 264, 315],
     "min_size" : [30, 60, 111, 162, 213, 264],
+    "max_size" : [60, 111, 162, 213, 264, 315],
     "aspect_ratios": [[2],[2,3],[2,3],[2,3],[2],[2]]
 }
 
@@ -100,20 +100,22 @@ class SSD(nn.Module):
         
         self.vgg = create_vgg()
         self.extras = create_extras()
-        self.loc, self.conf = creat_loc_conf(self.num_classes,cfg["bbox_aspect_num"])
+        self.loc, self.conf = creat_loc_conf(self.num_classes,self.cfg["bbox_aspect_num"])
         self.L2Norm = L2Norm()
-        defBox = DefBox(cfg)
-        self.defBox = defBox.create_defbox()
 
-        self.detect = Detect()
+        #create default anchor box
+        defBox = DefBox(cfg)
+        self.defBoxes = defBox.create_defbox()
+
+        # self.detect = Detect()
         if phase == 'inference':
-            # self.detect = Detect()
-            pass
+            self.detect = Detect()
 
     def forward(self, x):
-        sources = []
-        loc = []
-        con = []
+        sources = list()
+        loc = list()
+        con = list()
+
         for i in range(23):
             x = self.vgg[i](x)
         
@@ -122,11 +124,12 @@ class SSD(nn.Module):
 
         for i in range(23, len(self.vgg)):
             x = self.vgg[i](x)
+
         sources.append(x)
 
-        for k, v in enumerate(self.extras):
+        for i, v in enumerate(self.extras):
             x = v(x)
-            if k % 4 == 3:
+            if (i % 4) == 3:
                 sources.append(x)
         # print("sources")
 
@@ -156,33 +159,35 @@ class SSD(nn.Module):
         con = con.view(con.size(0), -1, self.num_classes)
 
 
-        output =  (loc, con, self.defBox)
+        output =  (loc, con, self.defBoxes)
 
         # print("dbox: ", self.defBox.size())
         if self.phase == "inference":
-            return self.detect(output[0], output[1], output[2])
+            with torch.no_grad():
+                return self.detect(output[0], output[1], output[2])
         else:
             return output
 
 def decode(loc, defbox_list):
     '''
     loc: [8732, 4] : cx_offset, cl_offsety, h_offset, w_offset
-    defbox_list: [8732,4]: cx_d, cy_d, h_d, w_d
+    defBoxes: [8732,4]: cx_d, cy_d, h_d, w_d
 
     returns:
     boxes: [xmin, ymin, xmax, ymax]
     '''
 
     boxes = torch.cat((
-        defbox_list[:,:2] + 0.1 *loc[:,:2]*defbox_list[:,:2],
-        defbox_list[:,2:] * torch.exp(loc[:,2:])),dim=1)
-    boxes[:,:2] -= boxes[:,2:]/2 #calculate xmin, ymin
-    boxes[:,2:] += boxes[:,:2] #calculate xmax, ymax
+        defbox_list[:, :2] + 0.1*loc[:, :2]*defbox_list[:, 2:],
+        defbox_list[:, 2:]*torch.exp(loc[:,2:]*0.2)), dim=1)
+
+    boxes[:, :2] -= boxes[:,2:]/2 #calculate xmin, ymin
+    boxes[:, 2:] += boxes[:, :2] #calculate xmax, ymax
 
     return boxes
 
 #Non maximum supression
-def nms(boxes, scores,threshold=0.5, top_k= 200):
+def nms(boxes, scores, threshold=0.5, top_k= 200):
     '''
     boxes: [num_boxes, 4]
     scores: [num_boxes]
@@ -209,28 +214,28 @@ def nms(boxes, scores,threshold=0.5, top_k= 200):
     value, idx = scores.sort(dim=0) #Sorted in increase order
     idx = idx[-top_k:] #list idx of top k box with greatest confidence score
 
-    while len(idx) > 0:
+    while idx.numel() > 0:
         i = idx[-1] #idx of greatest confidence score box
 
         keep[count] = i
         count += 1
         
-        if len(idx) == 1:
+        if idx.size() == 1:
             break
 
         idx = idx[:-1] # remove idx of greatest confidence score box
 
         #get information box
 
-        torch.index_select(input=x1, dim=0, index=idx, out=tmp_x1)
-        torch.index_select(input=x2, dim=0, index=idx, out=tmp_x2)
-        torch.index_select(input=y1, dim=0, index=idx, out=tmp_y1)
-        torch.index_select(input=y2, dim=0, index=idx, out=tmp_y2)
+        tmp_x1 = torch.index_select(input=x1, dim=0, index=idx) #x1
+        tmp_x2 = torch.index_select(input=x2, dim=0, index=idx) #x2
+        tmp_y1 = torch.index_select(input=y1, dim=0, index=idx) #y1
+        tmp_y2 = torch.index_select(input=y2, dim=0, index=idx) #y2
 
         #Get coordinates of intersection box
         tmp_x1 = torch.clamp(tmp_x1, min=x1[i])
-        tmp_y1 = torch.clamp(tmp_y1, min=y1[i])
         tmp_x2 = torch.clamp(tmp_x2, max=x2[i])
+        tmp_y1 = torch.clamp(tmp_y1, min=y1[i])
         tmp_y2 = torch.clamp(tmp_y2, max=y2[i])
 
         #size of tmp_w, tmp_h = (size(ofcurrentidx, dim=0))
@@ -240,11 +245,11 @@ def nms(boxes, scores,threshold=0.5, top_k= 200):
         tmp_w = tmp_x2 - tmp_x1
         tmp_h = tmp_y2 - tmp_y1
 
-        tmp_w = torch.clamp(tmp_w, min=0.0, max=1.0)
-        tmp_h = torch.clamp(tmp_h, min=0.0, max=1.0)
+        tmp_w = torch.clamp(tmp_w, min=0.0)
+        tmp_h = torch.clamp(tmp_h, min=0.0)
 
         #intersection area
-        inter = torch.mul(tmp_w, tmp_h)
+        inter = tmp_w * tmp_h
 
         #area of others boxes
         others_area = torch.index_select(area, 0, idx)
@@ -252,7 +257,7 @@ def nms(boxes, scores,threshold=0.5, top_k= 200):
         #union area
         union = area[i] + others_area - inter
 
-        iou = torch.div(inter, union)
+        iou = inter / union
 
         idx=idx[iou.le(threshold)]
     
@@ -267,12 +272,13 @@ class Detect(Function):
 
     def __call__(self, loc_data, conf_data, dbox_list):
         num_batch = loc_data.size(0) #batch size
-        num_dbo = loc_data.size(1) #8732
-        num_classes = conf_data.size(2) #4
+        num_dbox = loc_data.size(1) #8732
+        num_classes = conf_data.size(2) #num_classes = 4
 
         conf_data = self.softmax(conf_data)
 
-        #(batch_size, num_box, num_classes) -> (batch, num_classes, num_box)
+        #(batch_size, num_box, num_classes) 
+        # -> (batch, num_classes, num_box)
         conf_preds = conf_data.transpose(2,1)
 
         output = torch.zeros(num_batch, num_classes, self.top_k, 5)
@@ -292,14 +298,14 @@ class Detect(Function):
                 if scores.nelement() == 0: 
                     continue
 
-
+                #l_mask size: (8732) -> (8732, 4)
                 l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes) #(8732, 4)
 
-                boxes = decoded_boxes[l_mask].view(-1, 4)
+                boxes = decoded_boxes[l_mask].view(-1, 4) #boxes has confidence score > self.conf_threshold
 
-                ids, count = nms(boxes=boxes.detach(),scores=scores.detach(),threshold=self.nms_thresh,top_k=self.top_k)
-                output[ele, cl, :count] = torch.cat((scores[ids[:count]].unsqueeze(1), boxes[ids[:count]]), dim=1)
-            return output
+                ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
+                output[ele, cl, :count] = torch.cat((scores[ids[:count]].unsqueeze(1), boxes[ids[:count]]), 1)
+        return output
 
 
 

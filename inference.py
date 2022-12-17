@@ -1,6 +1,7 @@
 from lib import *
 from model import SSD
 from transform import Transform
+import sys
 
 
 classes = ["with_mask", "without_mask", "mask_weared_incorrect"]
@@ -17,7 +18,7 @@ cfg = {
 }
 net = SSD(cfg=cfg, phase="inference")
 
-net_weights = torch.load("./data/weights/ssd300_epoch10.pth", map_location={"cuda:0":"cpu"})
+net_weights = torch.load("./data/weights/ssd300_epoch30.pth", map_location={"cuda:0":"cpu"})
 
 net.load_state_dict(net_weights)
 
@@ -46,7 +47,7 @@ def show_predict(img_file_path):
 
     for i in range(detections.size(1)):
         j = 0
-        while detections[0, i, j, 0] >= 0.6:
+        while detections[0, i, j, 0] >= 0.7:
             score = detections[0, i, j, 0]
             pt = (detections[0, i, j, 1:]*scale).cpu().numpy()
             cv2.rectangle(img,
@@ -64,5 +65,6 @@ def show_predict(img_file_path):
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    img_file_path = "./data/test_img/mask.jpeg"
-    show_predict(img_file_path)
+    if len(sys.argv) > 1:
+        img_file_path = "./data/test_img/" + sys.argv[1]
+        show_predict(img_file_path)

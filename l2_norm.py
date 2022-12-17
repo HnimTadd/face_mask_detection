@@ -7,7 +7,6 @@ class L2Norm(nn.Module):
         self.scale = scale
         self.reset_parameters()
         self.eps = 1e-10
-        pass
 
     def reset_parameters(self):
         nn.init.constant_(self.weight, self.scale)

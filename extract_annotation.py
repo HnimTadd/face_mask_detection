@@ -3,6 +3,7 @@ from lib import *
 class  Anno_xml(object):
     def __init__(self, classes):
         self.classes = classes
+        
     def __call__(self, xml_path, width, height) :
 
 

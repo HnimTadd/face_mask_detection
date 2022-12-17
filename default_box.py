@@ -26,17 +26,17 @@ class DefBox():
             for i, j in itertools.product(range(f), repeat=2):
                 f_k = self.img_size / self.steps[k]
                 #Calculate center of default box
-                cx = (i+0.5)/f_k
-                cy = (j+0.5)/f_k
+                cx = (j+0.5)/f_k
+                cy = (i+0.5)/f_k
 
                 #Calculcate scale of default box
                 #size of small box
                 s_k = self.min_size[k]/self.img_size #first case: 30/300
                 
-                defbox_list += [cx, cy,s_k, s_k]
+                defbox_list += [cx, cy, s_k, s_k]
 
                 #big box
-                s_k_ = sqrt(s_k*self.max_size[k]/self.img_size)
+                s_k_ = sqrt(s_k*(self.max_size[k]/self.img_size))
                 defbox_list += [cx, cy, s_k_, s_k_]
 
                 for a_k in self.aspect_ratios[k]:
@@ -49,7 +49,7 @@ class DefBox():
                     #vertical box
                     defbox_list += [cx, cy, h_k, w_k]
 
-        output = torch.Tensor(defbox_list).reshape((-1,4))
+        output = torch.Tensor(defbox_list).view(-1,4)
         output.clamp_(min=0,max=1)
         return output
 

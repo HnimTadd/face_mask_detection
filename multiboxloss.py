@@ -26,15 +26,11 @@ class MultiBoxLoss(nn.Module):
         loc_t = torch.Tensor(num_batch, num_dbox, 4).to(self.device)
 
         for idx in range(num_batch):
-            truths = targets[idx][:, :-1] #bounding box (xmin, ymin, xmax, ymax)
-
-            labels = targets[idx][:, -1] # label of bounding box (labels)
+            truths = targets[idx][:, :-1].to(self.device) #bounding box (xmin, ymin, xmax, ymax)
+            labels = targets[idx][:, -1].to(self.device) # label of bounding box (labels)
 
             dbox = dbox_list.to(self.device)
-
             variances = [0.1, 0.2]
-            # print("Loc:", loc_t.size())
-            # print("con:",conf_t_label.size())
             match(self.jaccard_threshold, truths, dbox, variances, labels, loc_t, conf_t_label, idx)
         
         #SmoothL1Loss
@@ -49,6 +45,10 @@ class MultiBoxLoss(nn.Module):
         #Loss location
         loss_l = F.smooth_l1_loss(loc_p,loc_t, reduction="sum")
 
+
+
+
+
         #Loss confidence
         #CrossEntropy
         batch_conf = conf_data.view(-1, num_classes) #(numbatch, num_box, num_class)
@@ -56,12 +56,12 @@ class MultiBoxLoss(nn.Module):
         #shape of conf_t_label: (numbatch, numdbox * num_classes) -> (numbatch * numdbox* num_classes)
         # print(np.shape(conf_t_label.view(-1)))
         # exit()
-        loss_c = F.cross_entropy(batch_conf, conf_t_label.view(-1), reduction="none")
+        loss_conf = F.cross_entropy(batch_conf, conf_t_label.view(-1), reduction="none")
 
         num_pos = pos_mask.long().sum(dim=1, keepdim=True)
-        loss_c = loss_c.view(num_batch, -1) #size(num_batch, 8732)
+        loss_conf = loss_conf.view(num_batch, -1) #size(num_batch, 8732)
 
-        _, loss_idx = loss_c.sort(dim=1, descending=True)
+        _, loss_idx = loss_conf.sort(dim=1, descending=True)
         _, idx_rank = loss_idx.sort(1)
 
         num_neg = torch.clamp(self.neg_pos*num_pos, max = num_dbox)
@@ -73,11 +73,11 @@ class MultiBoxLoss(nn.Module):
         pos_idx_mask = pos_mask.unsqueeze(2).expand_as(conf_data)
         neg_idx_mask = neg_mask.unsqueeze(2).expand_as(conf_data)
 
-        #get confidence target of bounding which is hard negative and positive 
-        conf_t_label = conf_t_label[(pos_mask+neg_mask).gt(0)]
-
         #get confidence prediction
         conf_t_pre = conf_data[(pos_idx_mask + neg_idx_mask).gt(0)].view(-1, num_classes)
+
+        #get confidence target of bounding which is hard negative and positive 
+        conf_t_label = conf_t_label[(pos_mask+neg_mask).gt(0)]
 
         loss_conf = F.cross_entropy(conf_t_pre, conf_t_label,reduction="sum")
 

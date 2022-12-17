@@ -3,7 +3,7 @@ from transform import Transform
 from extract_annotation import Anno_xml
 from utils.random_array import train_val_separate
 class MyDataset(data.Dataset):
-    def __init__(self, imgs_list , annos_list,phase: str, transform : Transform,anno_xml : Anno_xml) -> None:
+    def __init__(self, imgs_list , annos_list,phase, transform, anno_xml) -> None:
         self.imgs = imgs_list
         self.annos = annos_list
         self.phase = phase
@@ -15,6 +15,7 @@ class MyDataset(data.Dataset):
     
     def __getitem__(self, index):
         img, gt, _, _ = self.pull_item(index)
+
         return img, gt
 
     def pull_item(self, index):
@@ -23,17 +24,15 @@ class MyDataset(data.Dataset):
         height, width, channels = img.shape #BGR
 
         #get anno information
-
         ann_file_path = self.annos[index]
         ann_info = self.anno_xml(ann_file_path, width, height)
 
 
         # processing
-
-        img, boxes, labels = self.transform(img,self.phase, ann_info[:,:4], ann_info[:,4])
+        img, boxes, labels = self.transform(img,self.phase, ann_info[:, :4], ann_info[:, 4])
 
         #BGR -> RGB: (height, width, channels) -> (channels, height, width)
-        img =  torch.from_numpy(img[:,:,(2, 1, 0)]).permute(2,  0 ,1)
+        img =  torch.from_numpy(img[:,:,(2,1,0)]).permute(2,0,1)
 
         #Ground truth 
         gt = gt = np.hstack((boxes, np.expand_dims(labels,axis=1)))
@@ -46,7 +45,9 @@ def my_collate_fn(batch):
     for sample in batch: #Sample: [(imgs, anns)]
         imgs.append(sample[0])
         targets.append(torch.FloatTensor(sample[1]))
-    imgs = torch.stack(imgs,dim=0) #-> imgs size: (batchsize, channels, height, width)
+        
+    #-> imgs size: (batchsize, channels, height, width)
+    imgs = torch.stack(imgs,dim=0)
     return imgs, targets
 
 
@@ -69,7 +70,6 @@ if __name__ == "__main__":
 
     color_mean = (104, 117, 123)
 
-    color_mean = (104, 117, 123)
 
     train_imgs, train_anns, val_imgs, val_anns = train_val_separate(imgs, anns, 0.9)
     transfrom = Transform(input_size=300,color_mean = color_mean)
