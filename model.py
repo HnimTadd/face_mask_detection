@@ -36,7 +36,7 @@ def create_extras():
     in_channels = 1024
     cfgs = [256, 512, 128, 256, 128, 256, 128, 256]
     #1024->256
-    layers += [nn.Conv2d(in_channels,cfgs[0],kernel_size=1,stride=1, padding=1)]
+    layers += [nn.Conv2d(in_channels,cfgs[0],kernel_size=1,stride=1)]
     layers += [nn.ReLU(inplace=True)]
     layers += [nn.Conv2d(cfgs[0],cfgs[1],kernel_size=3,stride=2, padding=1)]
     layers += [nn.ReLU(inplace=True)]
@@ -60,21 +60,21 @@ def create_extras():
 
 def creat_loc_conf(num_classes=4, bbox_aspect_nums=[4,6,6,6,4,4]):
     loc_layers=[]
-    loc_layers += [nn.Conv2d(512,bbox_aspect_nums[0]*4,kernel_size=3, stride=1,padding=1)]
-    loc_layers += [nn.Conv2d(1024,bbox_aspect_nums[1] * 4,kernel_size=3,stride=1,padding=1)]
-    loc_layers += [nn.Conv2d(512,bbox_aspect_nums[2] * 4,kernel_size=3,stride=1,padding=1)]
-    loc_layers += [nn.Conv2d(256,bbox_aspect_nums[3] * 4,kernel_size=3,stride=1,padding=1)]
-    loc_layers += [nn.Conv2d(256,bbox_aspect_nums[4] * 4,kernel_size=3,stride=1,padding=1)]
-    loc_layers += [nn.Conv2d(256,bbox_aspect_nums[5] * 4,kernel_size=3,stride=1,padding=1)]
+    loc_layers += [nn.Conv2d(512, bbox_aspect_nums[0]*4, kernel_size=3, stride=1, padding=1)]
+    loc_layers += [nn.Conv2d(1024, bbox_aspect_nums[1]*4, kernel_size=3, stride=1, padding=1)]
+    loc_layers += [nn.Conv2d(512, bbox_aspect_nums[2]*4, kernel_size=3, stride=1, padding=1)]
+    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[3]*4, kernel_size=3, stride=1, padding=1)]
+    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[4]*4, kernel_size=3, stride=1, padding=1)]
+    loc_layers += [nn.Conv2d(256, bbox_aspect_nums[5]*4, kernel_size=3, stride=1, padding=1)]
 
 
     conf_layers =[]
-    conf_layers += [nn.Conv2d(512,bbox_aspect_nums[0]*num_classes, kernel_size=3, padding=1,stride=1)]
-    conf_layers += [nn.Conv2d(1024,bbox_aspect_nums[1]*num_classes,kernel_size=3,stride=1,padding=1)]
-    conf_layers += [nn.Conv2d(512,bbox_aspect_nums[2]*num_classes,kernel_size=3,stride=1,padding=1)]
-    conf_layers += [nn.Conv2d(256,bbox_aspect_nums[3]*num_classes,kernel_size=3,stride=1,padding=1)]
-    conf_layers += [nn.Conv2d(256,bbox_aspect_nums[4]*num_classes,kernel_size=3,stride=1,padding=1)]
-    conf_layers += [nn.Conv2d(256,bbox_aspect_nums[5]*num_classes,kernel_size=3,stride=1,padding=1)]
+    conf_layers += [nn.Conv2d(512, bbox_aspect_nums[0]*num_classes, kernel_size=3, stride=1, padding=1)]
+    conf_layers += [nn.Conv2d(1024, bbox_aspect_nums[1]*num_classes, kernel_size=3, stride=1, padding=1)]
+    conf_layers += [nn.Conv2d(512, bbox_aspect_nums[2]*num_classes, kernel_size=3, stride=1, padding=1)]
+    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[3]*num_classes, kernel_size=3, stride=1, padding=1)]
+    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[4]*num_classes, kernel_size=3, stride=1, padding=1)]
+    conf_layers += [nn.Conv2d(256, bbox_aspect_nums[5]*num_classes, kernel_size=3, stride=1, padding=1)]
 
     # (512)
     return nn.ModuleList(loc_layers), nn.ModuleList(conf_layers)
@@ -128,14 +128,16 @@ class SSD(nn.Module):
             x = v(x)
             if k % 4 == 3:
                 sources.append(x)
-        
+        # print("sources")
 
         for (source, l, c) in zip(sources, self.loc, self.conf):
             #current source shape: (batch_size, 4*aspect_ratio_num, featuremap_height, featuremap_width)
             #-> (batch_size, featuremap_height, featuremap_width, 4*aspect_ratio_num)
-            loc.append(l(source).permute(0, 2, 3, 1).contiguous_format())
-            con.append(c(source).permute(0, 2, 3, 1).contiguous_format())
-
+            loc.append(l(source).permute(0, 2, 3, 1).contiguous())
+            con.append(c(source).permute(0, 2, 3, 1).contiguous())
+            # print(np.shape(source))
+        # print("loc: ", sum([len(i) for i in loc]))
+        # print("conf: ", len(con))
 
         # current loc shape: (batch_size, featuremap_height, featuremap_width, 4 *aspect_ratio_num
         # -> loc: (batch_size, 8742*4)
@@ -153,7 +155,10 @@ class SSD(nn.Module):
         # -> (batch_size, 8732, num_classes)
         con = con.view(con.size(0), -1, self.num_classes)
 
+
         output =  (loc, con, self.defBox)
+
+        # print("dbox: ", self.defBox.size())
         if self.phase == "inference":
             return self.detect(output[0], output[1], output[2])
         else:
@@ -186,13 +191,13 @@ def nms(boxes, scores,threshold=0.5, top_k= 200):
     keep = scores.new(scores.size(0)).zero_().long()
 
     #Box coordinate
-    x1 = boxes[:,0] #(num_boxes)
-    y1 = boxes[:,1]
-    x2 = boxes[:,2]
-    y2 = boxes[:,3]
+    x1 = boxes[:, 0] #(num_boxes)
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
 
     #calc area of boxes
-    area = torch.mul((x2-x1),(y2-y1))  #(num_boxes)
+    area = torch.mul(x2-x1,y2-y1)  #(num_boxes)
 
     tmp_x1 = boxes.new()
     tmp_x2 = boxes.new()
@@ -224,7 +229,7 @@ def nms(boxes, scores,threshold=0.5, top_k= 200):
 
         #Get coordinates of intersection box
         tmp_x1 = torch.clamp(tmp_x1, min=x1[i])
-        tmp_y1 = torch.clamp(tmp_y1, min=x2[i])
+        tmp_y1 = torch.clamp(tmp_y1, min=y1[i])
         tmp_x2 = torch.clamp(tmp_x2, max=x2[i])
         tmp_y2 = torch.clamp(tmp_y2, max=y2[i])
 
@@ -249,7 +254,7 @@ def nms(boxes, scores,threshold=0.5, top_k= 200):
 
         iou = torch.div(inter, union)
 
-        idx=[iou.le(threshold)]
+        idx=idx[iou.le(threshold)]
     
     return  keep, count
 
@@ -260,7 +265,7 @@ class Detect(Function):
         self.top_k = top_k
         self.nms_thresh = nms_threshold
 
-    def forward(self, loc_data, conf_data, dbox_list):
+    def __call__(self, loc_data, conf_data, dbox_list):
         num_batch = loc_data.size(0) #batch size
         num_dbo = loc_data.size(1) #8732
         num_classes = conf_data.size(2) #4
@@ -274,15 +279,15 @@ class Detect(Function):
         #loop over batch
         for ele in range(num_batch):
             # calc decoded bbound from offset information and default box
-            decoded_boxes = decode(loc_data[ele], dbox_list[ele])
+            decoded_boxes = decode(loc_data[ele], dbox_list)
 
             #copy confidence of batch element
             conf_scores = conf_preds[ele].clone()
             
             #loop from class 1 to end (ignore background class)
             for cl in range(1, num_classes):
-                c_mask = conf_preds[cl].gt(self.conf_thresh) # get confidence > 0.01
-                scores = conf_preds[cl][c_mask]
+                c_mask = conf_scores[cl].gt(self.conf_thresh) # get confidence > 0.01
+                scores = conf_scores[cl][c_mask]
 
                 if scores.nelement() == 0: 
                     continue
@@ -292,11 +297,9 @@ class Detect(Function):
 
                 boxes = decoded_boxes[l_mask].view(-1, 4)
 
-                ids, count = nms(boxes=boxes,scores=scores,threshold=self.nms_thresh,top_k=self.top_k)
-                output[ele, cl, :count] = torch.cat((scores[ids[:count]].unszquezee(1), boxes[ids[:count]]), dim=1)
+                ids, count = nms(boxes=boxes.detach(),scores=scores.detach(),threshold=self.nms_thresh,top_k=self.top_k)
+                output[ele, cl, :count] = torch.cat((scores[ids[:count]].unsqueeze(1), boxes[ids[:count]]), dim=1)
             return output
-
-
 
 
 
