@@ -164,7 +164,7 @@ class SSD(nn.Module):
         # print("dbox: ", self.defBox.size())
         if self.phase == "inference":
             with torch.no_grad():
-                return self.detect(output[0], output[1], output[2])
+                return self.detect(output[0].cuda(), output[1].cuda(), output[2].cuda())
         else:
             return output
 
@@ -176,7 +176,8 @@ def decode(loc, defbox_list):
     returns:
     boxes: [xmin, ymin, xmax, ymax]
     '''
-
+    loc = loc                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+    defbox_list = defbox_list
     boxes = torch.cat((
         defbox_list[:, :2] + 0.1*loc[:, :2]*defbox_list[:, 2:],
         defbox_list[:, 2:]*torch.exp(loc[:,2:]*0.2)), dim=1)

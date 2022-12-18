@@ -5,12 +5,18 @@ from model import SSD
 frameWidth = 640
 frameHeight = 480
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+print("device:", device)
+torch.backends.cudnn.benchmark = True
+torch.cuda.empty_cache()
+
+
 cap = cv2.VideoCapture(0)
 cap.set(3, frameWidth)
 cap.set(4, frameHeight)
 
 detector = colors = [(255,0,0), (0,255,0), (0,0,255)]
-font = cv2.FONT_HERSHEY_SCRIPT_SIMPLEX
+font = cv2.FONT_HERSHEY_DUPLEX
 classes = ["with_mask", "without_mask", "mask_weared_incorrect"]
 
 cfg = {
@@ -25,8 +31,9 @@ cfg = {
 }
 net = SSD(cfg=cfg, phase="inference")
 
-net_weights = torch.load("./data/weights/ssd300_epoch30.pth")
+net_weights = torch.load("./data/current_weights/ssd300_epoch30.pth")
 net.load_state_dict(net_weights)
+net.to(device)
 color_mean = (104, 117, 123)
 input_size = 300
 transform = Transform(input_size=input_size, color_mean= color_mean)
@@ -41,7 +48,7 @@ def cv2_demo(net, transform: Transform):
         img_tensor = torch.from_numpy(img_tranformed[:,:,(2,1,0)]).permute(2,0,1)
         net.eval()
         input = img_tensor.unsqueeze(0) #(1, 3, 300, 300)
-        output = net(input)
+        output = net(input.cuda())
 
         detections = output.data #(1, 21, 200, 5) 5: score, cx, cy, w, h
         scale = torch.Tensor(frame.shape[1::-1]).repeat(2)
@@ -56,7 +63,7 @@ def cv2_demo(net, transform: Transform):
                             colors[i%3], 2
                             )
                 display_text = "%s: %.2f"%(classes[i-1], score)
-                cv2.putText(frame, display_text, (int(pt[0]), int(pt[1])),
+                cv2.putText(frame, display_text, (int(pt[0]) - 10, int(pt[1]) - 10),
                     font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
                 j += 1
         return frame

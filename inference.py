@@ -3,6 +3,11 @@ from model import SSD
 from transform import Transform
 import sys
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+print("device:", device)
+torch.backends.cudnn.benchmark = True
+torch.cuda.empty_cache()
+
 
 classes = ["with_mask", "without_mask", "mask_weared_incorrect"]
 
@@ -17,11 +22,12 @@ cfg = {
     "aspect_ratios": [[2],[2,3],[2,3],[2,3],[2],[2]]
 }
 net = SSD(cfg=cfg, phase="inference")
+net.to(device)
 
-net_weights = torch.load("./data/weights/ssd300_epoch30.pth", map_location={"cuda:0":"cpu"})
+net_weights = torch.load("./data/current_weights/ssd300_epoch30.pth")
 
 net.load_state_dict(net_weights)
-
+# net.to(device)
 
 def show_predict(img_file_path):
     img = cv2.imread(img_file_path)
@@ -33,10 +39,9 @@ def show_predict(img_file_path):
     phase = "val"
     img_tranformed, boxes, labels = transform(img, phase, "", "")
     img_tensor = torch.from_numpy(img_tranformed[:,:,(2,1,0)]).permute(2,0,1)
-
     net.eval()
     input = img_tensor.unsqueeze(0) #(1, 3, 300, 300)
-    output = net(input)
+    output = net(input.cuda())
 
     plt.figure(figsize=(10, 10))
     colors = [(255,0,0), (0,255,0), (0,0,255)]
@@ -47,7 +52,7 @@ def show_predict(img_file_path):
 
     for i in range(detections.size(1)):
         j = 0
-        while detections[0, i, j, 0] >= 0.7:
+        while detections[0, i, j, 0] >= 0.5:
             score = detections[0, i, j, 0]
             pt = (detections[0, i, j, 1:]*scale).cpu().numpy()
             cv2.rectangle(img,
@@ -60,6 +65,7 @@ def show_predict(img_file_path):
                 font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
             j += 1
     
+    cv2.imwrite(os.path.join("./data/result_img/" + sys.argv[1]), img)
     cv2.imshow("Result", img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -68,3 +74,5 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         img_file_path = "./data/test_img/" + sys.argv[1]
         show_predict(img_file_path)
+
+cv2.destroyAllWindows()
