@@ -45,10 +45,6 @@ class MultiBoxLoss(nn.Module):
         #Loss location
         loss_l = F.smooth_l1_loss(loc_p,loc_t, reduction="sum")
 
-
-
-
-
         #Loss confidence
         #CrossEntropy
         batch_conf = conf_data.view(-1, num_classes) #(numbatch, num_box, num_class)
