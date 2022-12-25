@@ -157,6 +157,9 @@ def train_model(net, dataloader_dict, criterion, optimizer, num_epochs):
         if ((epoch + 1) % 10 == 0):
             torch.save(net.state_dict(), "./data/weights/ssd300_epoch{}.pth".format(epoch+1))
 
-num_epochs = 30
+
+
+num_epochs = 60
 
 train_model(net, dataLoader_dict,criterion, optimizer,num_epochs)
+
